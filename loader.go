@@ -36,7 +36,16 @@ func (l *Loader) httpClient() *http.Client {
 }
 
 func (l *Loader) Get(u string) (*http.Response, error) {
-	resp, err := l.httpClient().Get(u)
+	req, err := http.NewRequest("GET", u, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return l.Do(req)
+}
+
+func (l *Loader) Do(req *http.Request) (*http.Response, error) {
+	resp, err := l.httpClient().Do(req)
 	if err != nil {
 		return nil, err
 	}

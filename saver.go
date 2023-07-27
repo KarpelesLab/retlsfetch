@@ -180,7 +180,16 @@ func (s *Saver) keylog(b []byte) (int, error) {
 }
 
 func (s *Saver) Get(u string) (*http.Response, error) {
-	resp, err := s.httpClient().Get(u)
+	req, err := http.NewRequest("GET", u, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.Do(req)
+}
+
+func (s *Saver) Do(req *http.Request) (*http.Response, error) {
+	resp, err := s.httpClient().Do(req)
 	if err != nil {
 		return nil, err
 	}
