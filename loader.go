@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/netip"
 	"sync"
 	"time"
 )
@@ -95,9 +96,16 @@ func (l *Loader) dialContext(ctx context.Context, network, addr string) (net.Con
 func (l *Loader) dialTlsContext(ctx context.Context, network, addr string) (net.Conn, error) {
 	log.Printf("[loader] dial tls context: %s %s", network, addr)
 
+	res := l.fetch(addr + ":conn")
+	if len(res) > 0 {
+		return nil, errors.New(string(res))
+	}
+
 	c := &loaderConn{
 		loader: l,
 		name:   addr,
+		local:  spawnAddr(l.fetch(addr + ":local")),
+		remote: spawnAddr(l.fetch(addr + ":remote")),
 	}
 	host, _, _ := net.SplitHostPort(addr)
 	cfg := &tls.Config{
@@ -113,6 +121,12 @@ func (l *Loader) dialTlsContext(ctx context.Context, network, addr string) (net.
 		return nil, err
 	}
 	return cs, nil
+}
+
+func spawnAddr(b []byte) net.Addr {
+	ap := netip.AddrPort{}
+	ap.UnmarshalBinary(b)
+	return net.TCPAddrFromAddrPort(ap)
 }
 
 func (l *Loader) time() time.Time {

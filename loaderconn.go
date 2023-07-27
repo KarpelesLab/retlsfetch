@@ -8,6 +8,8 @@ import (
 type loaderConn struct {
 	loader *Loader
 	name   string
+	local  net.Addr
+	remote net.Addr
 }
 
 func (l *loaderConn) Read(b []byte) (int, error) {
@@ -27,13 +29,11 @@ func (l *loaderConn) Close() error {
 }
 
 func (l *loaderConn) LocalAddr() net.Addr {
-	// TODO
-	return nil
+	return l.local
 }
 
 func (l *loaderConn) RemoteAddr() net.Addr {
-	// TODO
-	return nil
+	return l.remote
 }
 
 func (l *loaderConn) SetDeadline(time.Time) error {

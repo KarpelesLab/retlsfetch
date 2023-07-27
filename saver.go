@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -75,8 +76,12 @@ func (s *Saver) dialTlsContext(ctx context.Context, network, addr string) (net.C
 	log.Printf("[saver] dial tls context: %s %s", network, addr)
 	c, err := s.dialer.DialContext(ctx, network, addr)
 	if err != nil {
+		s.append(addr+":conn", []byte(err.Error()))
 		return nil, err
 	}
+	s.append(addr+":conn", nil)
+	s.appendAddr(addr+":local", c.LocalAddr())
+	s.appendAddr(addr+":remote", c.RemoteAddr())
 	c = &logConn{
 		Conn:   c,
 		logger: s,
@@ -121,6 +126,17 @@ func (s *Saver) append(t string, b []byte) {
 	defer s.lk.Unlock()
 	log.Printf("[saver] appending %d bytes of %s", len(b), t)
 	s.data = append(s.data, &saverBuffer{t, dup(b)})
+}
+
+func (s *Saver) appendAddr(t string, addr net.Addr) {
+	switch a := addr.(type) {
+	case *net.TCPAddr:
+		ap := a.AddrPort()
+		bin, _ := ap.MarshalBinary()
+		s.append(t, bin)
+	default:
+		panic(fmt.Sprintf("unsupported addr type %T", addr))
+	}
 }
 
 func (s *Saver) keylog(b []byte) (int, error) {
