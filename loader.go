@@ -69,6 +69,9 @@ func (l *Loader) fetch(t string) []byte {
 			l.data = l.data[1:]
 			// set l.t
 			l.t.UnmarshalBinary(c.b)
+			if t == "time" {
+				return nil
+			}
 			continue
 		}
 		if n == 0 && c.t == "tls:keylog" {
@@ -98,7 +101,7 @@ func (l *Loader) dialTlsContext(ctx context.Context, network, addr string) (net.
 	}
 	host, _, _ := net.SplitHostPort(addr)
 	cfg := &tls.Config{
-		Time:       func() time.Time { log.Printf("time?"); return l.t },
+		Time:       l.time,
 		Rand:       readerFunc(l.readRand),
 		MinVersion: tls.VersionTLS12,
 		ServerName: host,
@@ -110,6 +113,11 @@ func (l *Loader) dialTlsContext(ctx context.Context, network, addr string) (net.
 		return nil, err
 	}
 	return cs, nil
+}
+
+func (l *Loader) time() time.Time {
+	l.fetch("time")
+	return l.t
 }
 
 func (l *Loader) readRand(b []byte) (int, error) {

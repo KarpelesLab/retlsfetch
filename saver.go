@@ -84,7 +84,7 @@ func (s *Saver) dialTlsContext(ctx context.Context, network, addr string) (net.C
 	}
 	host, _, _ := net.SplitHostPort(addr)
 	cfg := &tls.Config{
-		Time:         func() time.Time { log.Printf("time?"); return s.t },
+		Time:         s.time,
 		Rand:         readerFunc(s.ReadRand),
 		MinVersion:   tls.VersionTLS12,
 		ServerName:   host,
@@ -99,6 +99,13 @@ func (s *Saver) dialTlsContext(ctx context.Context, network, addr string) (net.C
 		return nil, err
 	}
 	return cs, nil
+}
+
+func (s *Saver) time() time.Time {
+	now := time.Now()
+	nowBin, _ := now.MarshalBinary()
+	s.append("time", nowBin)
+	return now
 }
 
 func (s *Saver) Save() []byte {
