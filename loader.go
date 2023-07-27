@@ -1,6 +1,7 @@
 package retlsfetch
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
@@ -34,22 +35,19 @@ func (l *Loader) httpClient() *http.Client {
 	return res
 }
 
-func (l *Loader) Get(u string) error {
+func (l *Loader) Get(u string) (*http.Response, error) {
 	resp, err := l.httpClient().Get(u)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
-	b := make([]byte, 65536)
-	for {
-		_, err := resp.Body.Read(b)
-		if err != nil {
-			if err == io.EOF {
-				return nil
-			}
-			return err
-		}
+	buf := &bytes.Buffer{}
+	_, err = io.Copy(buf, resp.Body)
+	if err != nil {
+		return nil, err
 	}
+	resp.Body = io.NopCloser(bytes.NewReader(buf.Bytes()))
+	return resp, nil
 }
 
 func (l *Loader) fetch(t string) []byte {

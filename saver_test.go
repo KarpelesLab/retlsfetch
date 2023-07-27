@@ -9,7 +9,7 @@ import (
 
 func TestSaver(t *testing.T) {
 	s := retlsfetch.NewSaver()
-	err := s.Get("https://ws.atonline.com/.well-known/time")
+	_, err := s.Get("https://ws.atonline.com/.well-known/time")
 
 	if err != nil {
 		t.Errorf("failed to get url: %s", err)
@@ -19,7 +19,7 @@ func TestSaver(t *testing.T) {
 
 	l := s.Loader()
 
-	err = l.Get("https://ws.atonline.com/.well-known/time")
+	_, err = l.Get("https://ws.atonline.com/.well-known/time")
 
 	if err != nil {
 		t.Errorf("failed to re-get url: %s", err)

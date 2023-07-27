@@ -179,25 +179,20 @@ func (s *Saver) keylog(b []byte) (int, error) {
 	return len(b), nil
 }
 
-func (s *Saver) Get(u string) error {
+func (s *Saver) Get(u string) (*http.Response, error) {
 	resp, err := s.httpClient().Get(u)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
-	b := make([]byte, 65536)
-	for {
-		n, err := resp.Body.Read(b)
-		if n > 0 {
-			s.append("http:body", b[:n])
-		}
-		if err != nil {
-			if err == io.EOF {
-				return nil
-			}
-			return err
-		}
+
+	buf := &bytes.Buffer{}
+	_, err = io.Copy(buf, resp.Body)
+	if err != nil {
+		return nil, err
 	}
+	resp.Body = io.NopCloser(bytes.NewReader(buf.Bytes()))
+	return resp, nil
 }
 
 func (s *Saver) ReadRand(b []byte) (int, error) {
