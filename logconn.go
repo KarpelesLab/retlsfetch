@@ -3,7 +3,7 @@ package retlsfetch
 import "net"
 
 type logConnLogger interface {
-	append(t string, b []byte)
+	append(t string, b []byte) error
 }
 
 type logConn struct {

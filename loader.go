@@ -1,9 +1,11 @@
 package retlsfetch
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -15,10 +17,23 @@ import (
 	"time"
 )
 
+type dataRecord struct {
+	t string
+	b []byte
+}
+
 type Loader struct {
+	r    *bufio.Reader
 	lk   sync.Mutex
-	data []*saverBuffer
 	t    time.Time
+	data []*dataRecord
+}
+
+func NewLoader(r io.Reader) *Loader {
+	res := &Loader{
+		r: bufio.NewReader(r),
+	}
+	return res
 }
 
 func (l *Loader) httpClient() *http.Client {
@@ -59,17 +74,52 @@ func (l *Loader) Do(req *http.Request) (*http.Response, error) {
 	return resp, nil
 }
 
-func (l *Loader) fetch(t string) []byte {
+func (l *Loader) loadRecord() (*dataRecord, error) {
+	ln, err := binary.ReadUvarint(l.r)
+	if err != nil {
+		return nil, fmt.Errorf("while reading len: %w", err)
+	}
+	t := make([]byte, ln)
+	_, err = io.ReadFull(l.r, t)
+	if err != nil {
+		return nil, err
+	}
+
+	ln, err = binary.ReadUvarint(l.r)
+	if err != nil {
+		return nil, err
+	}
+	b := make([]byte, ln)
+	_, err = io.ReadFull(l.r, b)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dataRecord{string(t), b}, nil
+}
+
+func (l *Loader) fetch(t string) ([]byte, error) {
 	l.lk.Lock()
 	defer l.lk.Unlock()
 
 	log.Printf("[loader] fetch %s", t)
 
+	for len(l.data) < 10 {
+		c, err := l.loadRecord()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return nil, err
+		}
+		l.data = append(l.data, c)
+	}
+
 	n := 0
 
 	for {
 		if len(l.data) <= n {
-			panic(fmt.Sprintf("out of data while looking for %s", t))
+			return nil, fmt.Errorf("out of data while looking for %s", t)
 		}
 		c := l.data[n]
 
@@ -78,7 +128,7 @@ func (l *Loader) fetch(t string) []byte {
 			// set l.t
 			l.t.UnmarshalBinary(c.b)
 			if t == "time" {
-				return nil
+				return nil, nil
 			}
 			continue
 		}
@@ -89,7 +139,7 @@ func (l *Loader) fetch(t string) []byte {
 		if c.t == t {
 			// remove from data
 			l.data = append(l.data[:n], l.data[n+1:]...)
-			return c.b
+			return c.b, nil
 		}
 		n += 1
 	}
@@ -103,7 +153,10 @@ func (l *Loader) dialContext(ctx context.Context, network, addr string) (net.Con
 func (l *Loader) dialTlsContext(ctx context.Context, network, addr string) (net.Conn, error) {
 	log.Printf("[loader] dial tls context: %s %s", network, addr)
 
-	res := l.fetch(addr + ":conn")
+	res, err := l.fetch(addr + ":conn")
+	if err != nil {
+		return nil, err
+	}
 	if len(res) > 0 {
 		return nil, errors.New(string(res))
 	}
@@ -122,7 +175,7 @@ func (l *Loader) dialTlsContext(ctx context.Context, network, addr string) (net.
 		ServerName: host,
 	}
 	cs := tls.Client(c, cfg)
-	err := cs.Handshake()
+	err = cs.Handshake()
 	if err != nil {
 		c.Close()
 		return nil, err
@@ -130,7 +183,10 @@ func (l *Loader) dialTlsContext(ctx context.Context, network, addr string) (net.
 	return cs, nil
 }
 
-func spawnAddr(b []byte) net.Addr {
+func spawnAddr(b []byte, err error) net.Addr {
+	if err != nil {
+		return nil
+	}
 	ap := netip.AddrPort{}
 	ap.UnmarshalBinary(b)
 	return net.TCPAddrFromAddrPort(ap)
@@ -146,7 +202,10 @@ func (l *Loader) readRand(b []byte) (int, error) {
 		// workaround for MaybeReadByte in crypto/internal/randutil/randutil.go
 		return len(b), nil
 	}
-	data := l.fetch("rnd:read")
+	data, err := l.fetch("rnd:read")
+	if err != nil {
+		return 0, err
+	}
 	copy(b, data)
 	return len(data), nil
 }

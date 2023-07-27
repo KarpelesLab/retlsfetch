@@ -6,7 +6,6 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -16,42 +15,28 @@ import (
 	"time"
 )
 
-type saverBuffer struct {
-	t string
-	b []byte
-}
-
-func (s *saverBuffer) MarshalJSON() ([]byte, error) {
-	return json.Marshal([]any{s.t, s.b})
-}
-
 type Saver struct {
-	data   []*saverBuffer
+	//data   []*saverBuffer
 	lk     sync.Mutex
 	t      time.Time
 	rnd    io.Reader
 	dialer net.Dialer
+	w      io.Writer
 }
 
-func NewSaver() *Saver {
+func NewSaver(w io.Writer) *Saver {
 	now := time.Now()
 
 	s := &Saver{
 		t:   now,
 		rnd: rand.Reader,
+		w:   w,
 		//rnd: sha3.NewCShake256(nil, nil), // this random will always return the same bytes
 	}
 
 	nowBin, _ := now.MarshalBinary()
 	s.append("time", nowBin)
 	return s
-}
-
-func (s *Saver) Loader() *Loader {
-	return &Loader{
-		data: s.data,
-		t:    s.t,
-	}
 }
 
 func (s *Saver) httpClient() *http.Client {
@@ -114,53 +99,29 @@ func (s *Saver) time() time.Time {
 	return now
 }
 
-func (s *Saver) Save() []byte {
-	buf := &bytes.Buffer{}
-	enc := json.NewEncoder(buf)
-	enc.SetIndent("", "  ")
-	enc.Encode(s.data)
-	return buf.Bytes()
-}
-
-func (s *Saver) WriteTo(w io.Writer) (int64, error) {
-	var n, n2 int
-	var total int64
-	var err error
-	vint := make([]byte, binary.MaxVarintLen64)
-
-	// write data as binary format
-	for _, d := range s.data {
-		n = binary.PutUvarint(vint, uint64(len(d.t)))
-		n2, err = w.Write(vint[:n])
-		total += int64(n2)
-		if err != nil {
-			return total, err
-		}
-		n2, err = w.Write([]byte(d.t))
-		total += int64(n2)
-		if err != nil {
-			return total, err
-		}
-		n = binary.PutUvarint(vint, uint64(len(d.b)))
-		n2, err = w.Write(vint[:n])
-		total += int64(n2)
-		if err != nil {
-			return total, err
-		}
-		n2, err = w.Write(d.b)
-		total += int64(n2)
-		if err != nil {
-			return total, err
-		}
-	}
-	return total, nil
-}
-
-func (s *Saver) append(t string, b []byte) {
+func (s *Saver) append(t string, b []byte) error {
 	s.lk.Lock()
 	defer s.lk.Unlock()
 	log.Printf("[saver] appending %d bytes of %s", len(b), t)
-	s.data = append(s.data, &saverBuffer{t, dup(b)})
+
+	vint := make([]byte, binary.MaxVarintLen64)
+	n := binary.PutUvarint(vint, uint64(len(t)))
+	_, err := s.w.Write(vint[:n])
+	if err != nil {
+		return err
+	}
+	_, err = s.w.Write([]byte(t))
+	if err != nil {
+		return err
+	}
+
+	n = binary.PutUvarint(vint, uint64(len(b)))
+	_, err = s.w.Write(vint[:n])
+	if err != nil {
+		return err
+	}
+	_, err = s.w.Write(b)
+	return err
 }
 
 func (s *Saver) appendAddr(t string, addr net.Addr) {

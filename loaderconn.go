@@ -13,7 +13,10 @@ type loaderConn struct {
 }
 
 func (l *loaderConn) Read(b []byte) (int, error) {
-	data := l.loader.fetch(l.name + ":read")
+	data, err := l.loader.fetch(l.name + ":read")
+	if err != nil {
+		return 0, err
+	}
 	copy(b, data)
 	return len(data), nil
 }
