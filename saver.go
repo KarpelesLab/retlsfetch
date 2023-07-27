@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/sha3"
@@ -25,6 +26,7 @@ func (s *saverBuffer) MarshalJSON() ([]byte, error) {
 
 type Saver struct {
 	data   []*saverBuffer
+	lk     sync.Mutex
 	t      time.Time
 	rnd    io.Reader
 	dialer net.Dialer
@@ -108,6 +110,8 @@ func (s *Saver) Save() []byte {
 }
 
 func (s *Saver) append(t string, b []byte) {
+	s.lk.Lock()
+	defer s.lk.Unlock()
 	log.Printf("[saver] appending %d bytes of %s", len(b), t)
 	s.data = append(s.data, &saverBuffer{t, dup(b)})
 }

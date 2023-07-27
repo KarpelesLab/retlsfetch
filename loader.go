@@ -57,25 +57,30 @@ func (l *Loader) fetch(t string) []byte {
 
 	log.Printf("[loader] fetch %s", t)
 
-	for {
-		n := l.data[0]
-		l.data = l.data[1:]
+	n := 0
 
-		if n.t == "time" {
+	for {
+		if len(l.data) <= n {
+			panic(fmt.Sprintf("out of data while looking for %s", t))
+		}
+		c := l.data[n]
+
+		if n == 0 && c.t == "time" {
+			l.data = l.data[1:]
 			// set l.t
-			l.t.UnmarshalBinary(n.b)
-			if t == "time" {
-				return n.b
-			}
+			l.t.UnmarshalBinary(c.b)
 			continue
 		}
-		if n.t == "tls:keylog" {
+		if n == 0 && c.t == "tls:keylog" {
+			l.data = l.data[1:]
 			continue
 		}
-		if n.t != t {
-			panic(fmt.Sprintf("invalid fetch, expected %s but got %s", t, n.t))
+		if c.t == t {
+			// remove from data
+			l.data = append(l.data[:n], l.data[n+1:]...)
+			return c.b
 		}
-		return n.b
+		n += 1
 	}
 }
 
