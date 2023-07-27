@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/tls"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -119,6 +120,40 @@ func (s *Saver) Save() []byte {
 	enc.SetIndent("", "  ")
 	enc.Encode(s.data)
 	return buf.Bytes()
+}
+
+func (s *Saver) WriteTo(w io.Writer) (int64, error) {
+	var n, n2 int
+	var total int64
+	var err error
+	vint := make([]byte, binary.MaxVarintLen64)
+
+	// write data as binary format
+	for _, d := range s.data {
+		n = binary.PutUvarint(vint, uint64(len(d.t)))
+		n2, err = w.Write(vint[:n])
+		total += int64(n2)
+		if err != nil {
+			return total, err
+		}
+		n2, err = w.Write([]byte(d.t))
+		total += int64(n2)
+		if err != nil {
+			return total, err
+		}
+		n = binary.PutUvarint(vint, uint64(len(d.b)))
+		n2, err = w.Write(vint[:n])
+		total += int64(n2)
+		if err != nil {
+			return total, err
+		}
+		n2, err = w.Write(d.b)
+		total += int64(n2)
+		if err != nil {
+			return total, err
+		}
+	}
+	return total, nil
 }
 
 func (s *Saver) append(t string, b []byte) {
