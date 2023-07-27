@@ -3,6 +3,7 @@ package retlsfetch
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/tls"
 	"encoding/json"
 	"io"
@@ -11,8 +12,6 @@ import (
 	"net/http"
 	"sync"
 	"time"
-
-	"golang.org/x/crypto/sha3"
 )
 
 type saverBuffer struct {
@@ -37,7 +36,8 @@ func NewSaver() *Saver {
 
 	s := &Saver{
 		t:   now,
-		rnd: sha3.NewCShake256(nil, nil), // this random will always return the same bytes
+		rnd: rand.Reader,
+		//rnd: sha3.NewCShake256(nil, nil), // this random will always return the same bytes
 	}
 
 	nowBin, _ := now.MarshalBinary()
