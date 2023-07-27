@@ -16,4 +16,12 @@ func TestSaver(t *testing.T) {
 	}
 
 	log.Printf("LOG DATA:\n%s", s.Save())
+
+	l := s.Loader()
+
+	err = l.Get("https://ws.atonline.com/.well-known/time")
+
+	if err != nil {
+		t.Errorf("failed to re-get url: %s", err)
+	}
 }

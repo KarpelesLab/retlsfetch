@@ -43,6 +43,13 @@ func NewSaver() *Saver {
 	return s
 }
 
+func (s *Saver) Loader() *Loader {
+	return &Loader{
+		data: s.data,
+		t:    s.t,
+	}
+}
+
 func (s *Saver) httpClient() *http.Client {
 	res := &http.Client{
 		Transport: &http.Transport{
@@ -75,10 +82,11 @@ func (s *Saver) dialTlsContext(ctx context.Context, network, addr string) (net.C
 	}
 	host, _, _ := net.SplitHostPort(addr)
 	cfg := &tls.Config{
-		Time:       func() time.Time { log.Printf("time?"); return s.t },
-		Rand:       readerFunc(s.ReadRand),
-		MinVersion: tls.VersionTLS12,
-		ServerName: host,
+		Time:         func() time.Time { log.Printf("time?"); return s.t },
+		Rand:         readerFunc(s.ReadRand),
+		MinVersion:   tls.VersionTLS12,
+		ServerName:   host,
+		KeyLogWriter: writerFunc(s.keylog),
 	}
 	// TODO handshake
 	cs := tls.Client(c, cfg)
@@ -104,6 +112,11 @@ func (s *Saver) append(t string, b []byte) {
 	s.data = append(s.data, &saverBuffer{t, dup(b)})
 }
 
+func (s *Saver) keylog(b []byte) (int, error) {
+	s.append("tls:keylog", b)
+	return len(b), nil
+}
+
 func (s *Saver) Get(u string) error {
 	resp, err := s.httpClient().Get(u)
 	if err != nil {
@@ -126,6 +139,10 @@ func (s *Saver) Get(u string) error {
 }
 
 func (s *Saver) ReadRand(b []byte) (int, error) {
+	if len(b) == 1 {
+		// workaround for MaybeReadByte in crypto/internal/randutil/randutil.go
+		return len(b), nil
+	}
 	n, err := s.rnd.Read(b)
 	if err != nil {
 		log.Printf("[rand] error: %s", err)
