@@ -21,6 +21,9 @@ func (l *logConn) Read(b []byte) (int, error) {
 }
 
 func (l *logConn) Write(b []byte) (int, error) {
-	l.logger.append(l.name+":write", b)
-	return l.Conn.Write(b)
+	n, err := l.Conn.Write(b)
+	if n > 0 {
+		l.logger.append(l.name+":write", b[:n])
+	}
+	return n, err
 }
